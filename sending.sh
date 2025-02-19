@@ -1,15 +1,27 @@
+
 #!bin/bash
 
 MAIL="$1"
 FILE="$2"
-ACCOUNT=$(cat Account.txt)
+NAME="$3"
+ACCOUNT=$(cat ./Data/Account)
+
+
+if [[ $FILE = "" ]]; then
+	toot post "$(printf "$MAIL")" &
+else
+	toot post -m "$FILE" "$(printf "$MAIL")"
+fi
 
 
 while read user; do
 	echo "sending $MAIL to $user"
-	if [[ FILE = "" ]]; then
-		signal-cli -a $ACCOUNT send "$user" -m "$MAIL"
+	if [[ $FILE = "" ]]; then
+		echo "kein Attachment"
+		echo "Sende Nachricht an $user"
+		signal-cli --dbus -a $ACCOUNT send "$user" -m "$(printf "$MAIL")" &
 	else
-		signal-cli -a $ACCOUNT send "$user" -m "$MAIL" -a "$FILE"
+		echo  "Attachment gefunden"
+		signal-cli --dbus -a $ACCOUNT send "$user" -m "$(printf "$MAIL")" -a "$FILE" &
 	fi
-done<<<$(cat subscribed)
+done<<<$(cat ./Data/Subscribed)

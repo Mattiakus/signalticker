@@ -1,40 +1,40 @@
 #!/bin/bash
 
-ACCOUNT=$(cat Account.txt)
-printf "trying to receive Messages\n"
-MESSAGE=$(signal-cli -a $ACCOUNT receive --ignore-stories) 
-#MESSAGE=$(cat backup.txt)
-#printf "$MESSAGE"
-printf "$MESSAGE" >> 'message.tmp'
-printf "Received all messages\n"
+ACCOUNT=$(cat ./Data/Account)
+LOGFILE="./Data/log.txt"
+PASSTHROUGH="bash ./Bash/commands.sh"
 
-if [[ $MESSAGE == '' ]]; then
-	printf "No message sent\n"
-else
-	MESSAGE="${MESSAGE} \nEnvelope \n"
-	#printf "$MESSAGE"
-	printf "$MESSAGE" | while read line; do
-		#printf "processing: "
-		#printf "$line \n"
-		
+	
+signal-cli daemon --dbus | while read line; do
+	#printf "processing: "
+	#printf "$line \n"
+	if [[ "$line" = "Group info:" ]] || [[ "$line" = "With profile key" ]]; then
+		state="0"
+	fi
+	if [[ "$state" = GETTEXT ]]; then
+		TEXT="$TEXT\n$line"
+	else
 		if [[ "$line" = Envelope* ]]; then
-			echo "///MESSAGE///" 	
-			echo "Name:$NAME"		
-			echo "Time:$(date)"		
-			echo "User:$uid"		
-			echo "Group:$gid"		
-			echo "Text:$TEXT"		
-			echo "File:$FILE"		
-			echo "///MESSAGE///" 	> log.txt
-			echo "Name:$NAME"		> log.txt
-			echo "Time:$(date)"		> log.txt
-			echo "User:$uid"		> log.txt
-			echo "Group:$gid"		> log.txt
-			echo "Text:$TEXT"		> log.txt
-			echo "File:$FILE"		> log.txt
-			
 			if [[ "$TEXT" != "" ]] || [[ "$FILE" != "" ]]; then
-				bash commands.sh "$uid" "$gid" "$TEXT" "$FILE"
+				echo "///MESSAGE///" 	
+				echo "Name:$NAME"		
+				echo "Time:$(date)"	
+				echo "Timestamp:$TIME"	
+				echo "User:$uid"		
+				echo "Group:$gid"		
+				echo "Text:$TEXT"		
+				echo "File:$FILE"		
+				echo "///MESSAGE///" 	>> "$LOGFILE"
+				echo "Name:$NAME"		>> "$LOGFILE"
+				echo "Time:$(date)"		>> "$LOGFILE"
+				echo "Timestamp:$TIME"	>> "$LOGFILE"
+				echo "User:$uid"		>> "$LOGFILE"
+				echo "Group:$gid"		>> "$LOGFILE"
+				echo "Text:$TEXT"		>> "$LOGFILE"
+				echo "File:$FILE"		>> "$LOGFILE"
+
+
+				$PASSTHROUGH "$uid" "$gid" "$TEXT" "$FILE" "$NAME"
 			fi
 			
 			NAME=""
@@ -66,6 +66,11 @@ else
 			#echo "reading from regular message"
 			if [[ "$line" = Body* ]]; then
 				TEXT="${line:6}"
+				state="GETTEXT"
+			fi
+			if [[ "$line" = Timestamp:* ]]; then
+				TIME="${line#Timestamp: }"
+				TIME="${TIME% (20*}"
 			fi
 			
 		fi
@@ -83,11 +88,9 @@ else
 				FILE="${line:21}"
 			fi
 		fi
-		
-	done
-	rm ./message.tmp
-fi
+	fi
+done
 
-
+bash ./Bash/cleanup.sh
 
 
