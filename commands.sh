@@ -3,12 +3,16 @@
 uid="$1"
 gid="$2"
 TEXT="$3"
+COMMAND="${TEXT,,}"
+COMMAND="${COMMAND#!}"
+COMMAND="${COMMAND%% *}"
+COMMAND="${COMMAND%%\\*}"
+echo "the command is \"$COMMAND\""
 FILE="$4"
 NAME="$5"
 
 ACCOUNT=$(cat ./Data/Account)
 ADMINGROUP="NiZFSzOdvI5aysoKSp6tOPOGqCqKaqWKn+/kAtAt7wY="
-prefix="BOT"
 
 ADMIN="0"
 while read user; do
@@ -33,44 +37,73 @@ else
 	GROUP="1"
 fi
 
-if [[ "$TEXT" = -shouts* ]]; then
+if [[ "$TEXT" = !* ]]; then
 
-	signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(cat ./Data/Shouts/${TEXT#-shouts })"
+	if [[ "$COMMAND" = "version" ]] || [[ "$COMMAND" = "v" ]]; then
+		signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(cat ./Data/version)"
+	elif [[ "$COMMAND" = "shouts" ]] || [[ "$COMMAND" = "s" ]]; then
+		SHOUTFILE="${TEXT#* }"
+		SHOUTFILE="${SHOUTFILE,,}"
+		if [ -f "./Data/Shouts/$SHOUTFILE" ]; then
+			signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(cat ./Data/Shouts/$SHOUTFILE)"
+		else
+			signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "Habe Liste namens \"$SHOUTFILE\" nicht gefunden. Schreibe \"-help\" (ohne die Ahnführungszeichen) um zu sehen, welche Listen es gibt"
+		fi
+	elif [[ "$COMMAND" = help ]] || [[ "$COMMAND" = "h" ]]; then
+		if [[ "$ADMIN" = "0" ]]; then
+			signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(printf "\
+			Hier ist eine Liste von commands:\n\
+			-shouts [Antifa|Umwelt] zeigt eine Liste mit Demorufen an\n\
+			-subscribe fügt dich zu der Verteilerliste hinzu\n\
+			-unsubscribe entfernt dich von der Verteilerliste\n\
+			Wenn du eine Nachricht schreibst, die nicht mit einem command anfängt, schreibst du eine Nachricht an die Admins")"
+		else
+			signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(printf "Hier ist eine Liste von commands:\n\
+			-shouts [Antifa|Umwelt] zeigt eine Liste mit Demorufen an\n\
+			-subscribe fügt dich zu der Verteilerliste hinzu\n\
+			-unsubscribe entfernt dich von der Verteilerliste\n\
+			-echo [NACHRICHT] schickt dir eine Nachricht mit dem Inhalt NACHRICHT\n\
+			Wenn du eine Nachricht schreibst, die nicht mit einem command anfängt, schreibst du eine Nachricht an die Admins")"
+		fi
 
-elif [[ "$TEXT" = -help* ]]; then
+	elif [[ "$COMMAND" = "subscribe" ]] && [[ $GROUP = "0" ]]; then
 
-	signal-cli --dbus -a "$ACCOUNT" send "$uid" -m "$(printf "Hier ist eine Liste von commands:\n-shouts [Antifa|Umwelt] zeigt eine Liste mit Demorufen an\n-subscribe fügt dich zu der Verteilerliste hinzu\n-unsubscribe entfernt dich von der Verteilerliste")" &
+		if [[ $SUBBED = "1" ]]; then
+			signal-cli --dbus -a $ACCOUNT send $uid -m "Du hast schon Abonniert :)"
+		else
+			echo "Abonniere $uid"
+			echo "$uid" >> ./Data/Subscribed
+			signal-cli --dbus -a $ACCOUNT send $uid -m "Du wurdest erfolgreich zur Liste hinzugefügt"
+		fi
 
-elif [[ $TEXT = -subscribe* ]] && [[ $GROUP = "0" ]]; then
+	elif [[ "$COMMAND" = "unsubscribe" ]] && [[ $GROUP = "0" ]]; then
 
-	if [[ $SUBBED = "1" ]]; then
-		signal-cli --dbus -a $ACCOUNT send $uid -m "Du hast schon Abonniert :)" &
+		sed -i /$uid/d  ./Data/Subscribed
+		signal-cli --dbus -a $ACCOUNT send $uid -m "Du wurdest von der Liste entfernt"
+	
+	elif [[ "$COMMAND" = "echo" ]]; then
+		echo "gebe folgendes aus: ${TEXT#* }"
+		OUTPUT="${TEXT#* }"
+		signal-cli --dbus -a $ACCOUNT send $uid -m "$(printf "$OUTPUT")"
 	else
-		echo "Abonniere $uid"
-		echo "$uid" >> ./Data/Subscribed
-		signal-cli --dbus -a $ACCOUNT send $uid -m "Du wurdest erfolgreich zur Liste hinzugefügt" &
+		signal-cli --dbus -a $ACCOUNT send $uid -m "Diesen Befehl kenne ich nicht. Schreibe mir \"-help\" (ohne Anführungszeichen) um eine Liste mit den Befehlen angezeigt zu bekommen"
+		echo "$TEXT" >> ./Data/errors
 	fi
-
-elif [[ $TEXT = -unsubscribe* ]] && [[ $GROUP = "0" ]]; then
-
-	sed -i /$uid/d  ./Data/Subscribed
-	signal-cli --dbus -a $ACCOUNT send $uid -m "Du wurdest von der Liste entfernt" &
-
 elif [[ $GROUP = "0" ]]; then
 	if [[ $ADMIN = "1" ]]; then
 	 ###ADMIN COMMANDS###
-		signal-cli --dbus -a $ACCOUNT send $uid -m "Du bist krass" &
-		bash ./Bash/sending.sh "$TEXT" "$FILE" "$NAME" &
+		signal-cli --dbus -a $ACCOUNT send $uid -m "Die nachricht wird gepostet"
+		bash ./Bash/sending.sh "$TEXT" "$FILE" "$NAME"
 		
 	else
 	 ###NORMAL COMMANDS###
-		signal-cli --dbus -a $ACCOUNT send $uid -m "Du wurdest noch nicht verifiziert. Deine Nachricht wird manuell überprüft. Das kann einen Moment dauern, bitte habe etwas Geduld." &
+		signal-cli --dbus -a $ACCOUNT send $uid -m "Deine Nachricht wird an die Admins weitergeleitet :)"
 		if [[ $FILE != "" ]]; then
-			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$NAME:" &
-			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$TEXT" -a "$FILE" &
+			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$NAME:"
+			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$(printf "$TEXT")" -a "$FILE"
 		else
-			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$NAME:" &
-			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$TEXT" &
+			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$NAME:"
+			signal-cli --dbus -a $ACCOUNT send -g $ADMINGROUP -m "$(printf "$TEXT")"
 		fi
 	fi
 fi

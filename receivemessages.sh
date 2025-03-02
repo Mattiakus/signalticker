@@ -4,47 +4,71 @@ ACCOUNT=$(cat ./Data/Account)
 LOGFILE="./Data/log.txt"
 PASSTHROUGH="bash ./Bash/commands.sh"
 
+
+printmsg () {
+	if [[ "$TEXT" != "" ]] || [[ "$FILE" != "" ]]; then
+		echo "///MESSAGE///" 	
+		echo "Name:$NAME"		
+		echo "Time:$(date)"	
+		echo "Timestamp:$TIME"	
+		echo "User:$uid"		
+		echo "Group:$gid"		
+		echo "Text:$TEXT"		
+		echo "File:$FILE"		
+		if [[ $gid = "" ]]; then
+			echo "///MESSAGE///" 	>> "$LOGFILE"
+			echo "Name:$NAME"		>> "$LOGFILE"
+			echo "Time:$(date)"		>> "$LOGFILE"
+			echo "Timestamp:$TIME"	>> "$LOGFILE"
+			echo "User:$uid"		>> "$LOGFILE"
+			echo "Group:$gid"		>> "$LOGFILE"
+			echo "Text:$TEXT"		>> "$LOGFILE"
+			echo "File:$FILE"		>> "$LOGFILE"
+		fi
+
+		$PASSTHROUGH "$uid" "$gid" "$TEXT" "$FILE" "$NAME"
+	fi
+
+	NAME=""
+	uid=""
+	gid=""
+	TIME=""
+	TEXT=""
+	FILE=""
+	state="0" #0 for regular message, 1 for group and 2 for attachment
+}
+
+
+rm ./Data/instream1
+rm ./Data/instream2
+touch ./Data/instream1
+touch ./Data/instream2
 	
-signal-cli daemon --dbus | while read line; do
-	#printf "processing: "
-	#printf "$line \n"
-	if [[ "$line" = "Group info:" ]] || [[ "$line" = "With profile key" ]]; then
+bash ./Bash/dbushandler.sh &
+
+while [[ $(cat ./Data/instream1) = "" ]]; do
+sleep 1
+done;
+echo "starting to parse messages"
+firstmsg="yes"
+
+while true; do
+while read line; do
+	if [[ "$firstmsg" = "yes" ]]; then
+		firstmsg="no"
+		cp ./Data/instream1 ./Data/instream2
+	fi
+	
+	
+	if [[ "$line" = "Group info:" ]] || [[ "$line" = "With profile key" ]] || [[ "$line" = "Expires in:*" ]]; then
 		state="0"
 	fi
 	if [[ "$state" = GETTEXT ]]; then
 		TEXT="$TEXT\n$line"
 	else
 		if [[ "$line" = Envelope* ]]; then
-			if [[ "$TEXT" != "" ]] || [[ "$FILE" != "" ]]; then
-				echo "///MESSAGE///" 	
-				echo "Name:$NAME"		
-				echo "Time:$(date)"	
-				echo "Timestamp:$TIME"	
-				echo "User:$uid"		
-				echo "Group:$gid"		
-				echo "Text:$TEXT"		
-				echo "File:$FILE"		
-				echo "///MESSAGE///" 	>> "$LOGFILE"
-				echo "Name:$NAME"		>> "$LOGFILE"
-				echo "Time:$(date)"		>> "$LOGFILE"
-				echo "Timestamp:$TIME"	>> "$LOGFILE"
-				echo "User:$uid"		>> "$LOGFILE"
-				echo "Group:$gid"		>> "$LOGFILE"
-				echo "Text:$TEXT"		>> "$LOGFILE"
-				echo "File:$FILE"		>> "$LOGFILE"
-
-
-				$PASSTHROUGH "$uid" "$gid" "$TEXT" "$FILE" "$NAME"
-			fi
 			
-			NAME=""
-			uid=""
-			gid=""
-			TIME=""
-			TEXT=""
-			FILE=""
-			state="0" #0 for regular message, 1 for group and 2 for attachment
-		
+			printmsg
 			
 			uid="${line##*” }"
 			uid="${uid% (device*}"
@@ -89,8 +113,10 @@ signal-cli daemon --dbus | while read line; do
 			fi
 		fi
 	fi
+
+done <<<"$(comm --nocheck-order -2 -3 ./Data/instream1 ./Data/instream2)"
+
+printmsg
+firstmsg="yes"
+sleep 1
 done
-
-bash ./Bash/cleanup.sh
-
-
