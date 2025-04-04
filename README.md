@@ -6,3 +6,9 @@ this repo requires the following programs installed and configured:
 - toot (A mastodon cli client)
 
 also you need to install a python venv in the python folder where you install the instagrapi library. After that you can put your instagram login credentials in the "Data/Instagram" file
+
+### Features to come:
+- I want to re-implement shouts
+- easier reposting by having a quick-repost list so you don't have to do the post command
+- a special command for sharing a post to a list of groups too
+- adding people as admins via signal
