@@ -1,6 +1,6 @@
 import sys
 import os
-from instagrapi import Client
+#from instagrapi import Client
 
 
 uid=sys.argv[1]
